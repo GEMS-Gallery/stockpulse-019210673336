@@ -3,34 +3,296 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock Information App</title>
-    <link rel="stylesheet" href="index.css">
+    <title>Streamlined Stock Info with Heatmap</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            line-height: 1.6;
+            color: #000;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #fff;
+        }
+        .container {
+            border: 1px solid #000;
+            padding: 20px;
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .stock-info {
+            flex: 1;
+            min-width: 300px;
+            margin-right: 20px;
+        }
+        .heatmap {
+            flex: 2;
+            min-width: 500px;
+        }
+        h1, h2 {
+            color: #000;
+            border-bottom: 1px solid #000;
+            padding-bottom: 5px;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: 'Courier New', Courier, monospace;
+            border: 1px solid #000;
+        }
+        button {
+            background-color: #000;
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #333;
+        }
+        #result, #secFilings, #companyNews {
+            margin-top: 20px;
+        }
+        .filing-item, .news-item {
+            border: 1px solid #000;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        a {
+            color: #000;
+            text-decoration: none;
+            border-bottom: 1px solid #000;
+        }
+        a:hover {
+            background-color: #000;
+            color: #fff;
+        }
+        .heatmap-cell {
+            stroke: #fff;
+            stroke-width: 1px;
+        }
+        .heatmap-label {
+            font-size: 10px;
+            fill: #000;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Stock Information App</h1>
-        
-        <form id="addStockForm">
-            <input type="text" id="symbol" placeholder="Stock Symbol" required>
-            <input type="text" id="name" placeholder="Stock Name" required>
-            <input type="number" id="price" placeholder="Stock Price" step="0.01" required>
-            <button type="submit">Add Stock</button>
-        </form>
-
-        <button id="updatePrices">Update Prices</button>
-
-        <table id="stockTable">
-            <thead>
-                <tr>
-                    <th>Symbol</th>
-                    <th>Name</th>
-                    <th>Price</th>
-                </tr>
-            </thead>
-            <tbody id="stockList"></tbody>
-        </table>
+        <div class="stock-info">
+            <h1>Stock Information</h1>
+            <input type="text" id="symbolInput" placeholder="Enter stock symbol (e.g., AAPL)">
+            <button onclick="getStockInfo()">GET STOCK INFO</button>
+            <div id="result"></div>
+            <div id="secFilings"></div>
+            <div id="companyNews"></div>
+        </div>
+        <div class="heatmap">
+            <h2>Market Heatmap</h2>
+            <div id="heatmapContainer"></div>
+        </div>
     </div>
 
-    <script src="index.js"></script>
+    <script>
+        const API_KEY = 'crjpakpr01qnnbrso6l0crjpakpr01qnnbrso6lg';
+
+        async function fetchData(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('Fetched data:', data);  // Log the fetched data
+                return data;
+            } catch (error) {
+                console.error('Fetch error:', error);
+                return null;
+            }
+        }
+
+        async function getStockInfo() {
+            const symbol = document.getElementById('symbolInput').value.toUpperCase();
+            const resultDiv = document.getElementById('result');
+            const secFilingsDiv = document.getElementById('secFilings');
+            const companyNewsDiv = document.getElementById('companyNews');
+            
+            resultDiv.innerHTML = 'LOADING...';
+            secFilingsDiv.innerHTML = '';
+            companyNewsDiv.innerHTML = '';
+
+            try {
+                const [profileData, quoteData, filingsData, newsData] = await Promise.all([
+                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${getDateString(30)}&to=${getDateString(0)}&token=${API_KEY}`)
+                ]);
+
+                displayStockInfo(profileData, quoteData, filingsData, newsData);
+
+            } catch (error) {
+                resultDiv.innerHTML = `ERROR: ${error.message}. PLEASE TRY AGAIN LATER.`;
+                console.error('Detailed error:', error);
+            }
+        }
+
+        function getDateString(daysAgo) {
+            const date = new Date();
+            date.setDate(date.getDate() - daysAgo);
+            return date.toISOString().split('T')[0];
+        }
+
+        function displayStockInfo(profileData, quoteData, filingsData, newsData) {
+            const resultDiv = document.getElementById('result');
+            const secFilingsDiv = document.getElementById('secFilings');
+            const companyNewsDiv = document.getElementById('companyNews');
+
+            const companyName = profileData?.name || 'COMPANY NAME NOT AVAILABLE';
+            const currentPrice = quoteData?.c ? `$${quoteData.c.toFixed(2)}` : 'PRICE NOT AVAILABLE';
+            const change = quoteData?.d != null ? quoteData.d.toFixed(2) : 'N/A';
+            const percentChange = quoteData?.dp != null ? quoteData.dp.toFixed(2) : 'N/A';
+
+            resultDiv.innerHTML = `
+                <h2>${companyName}</h2>
+                <p>CURRENT PRICE: ${currentPrice}</p>
+                <p>CHANGE: ${change} (${percentChange}%)</p>
+                <p>SECTOR: ${profileData?.finnhubIndustry || 'N/A'}</p>
+            `;
+
+            secFilingsDiv.innerHTML = '<h2>RECENT SEC FILINGS</h2>';
+            if (filingsData && filingsData.length > 0) {
+                filingsData.slice(0, 5).forEach(filing => {
+                    secFilingsDiv.innerHTML += createFilingItem(filing);
+                });
+            } else {
+                secFilingsDiv.innerHTML += '<p>NO SEC FILINGS AVAILABLE.</p>';
+            }
+
+            companyNewsDiv.innerHTML = '<h2>LATEST COMPANY NEWS</h2>';
+            if (newsData && newsData.length > 0) {
+                newsData.slice(0, 5).forEach(news => {
+                    companyNewsDiv.innerHTML += createNewsItem(news);
+                });
+            } else {
+                companyNewsDiv.innerHTML += '<p>NO RECENT NEWS AVAILABLE.</p>';
+            }
+        }
+
+        async function createMarketHeatmap() {
+            const heatmapContainer = document.getElementById('heatmapContainer');
+            heatmapContainer.innerHTML = 'LOADING MARKET HEATMAP...';
+
+            try {
+                const symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'BRK.B', 'NVDA', 'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'BAC', 'MA', 'DIS', 'ADBE', 'CRM', 'NFLX'];
+                const stocksData = await Promise.all(symbols.map(async (symbol) => {
+                    const quoteData = await fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`);
+                    return {
+                        symbol: symbol,
+                        price: quoteData?.c || 0,
+                        change: quoteData?.d || 0,
+                        percentChange: quoteData?.dp || 0
+                    };
+                }));
+
+                createHeatmap(stocksData.filter(stock => stock.price > 0));
+
+            } catch (error) {
+                heatmapContainer.innerHTML = `ERROR LOADING HEATMAP: ${error.message}`;
+                console.error('Heatmap error:', error);
+            }
+        }
+
+        function createHeatmap(data) {
+            const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+            const width = 800 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            d3.select("#heatmapContainer").selectAll("*").remove();
+
+            const svg = d3.select("#heatmapContainer")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const treemapLayout = d3.treemap()
+                .size([width, height])
+                .padding(1);
+
+            const root = d3.hierarchy({ children: data })
+                .sum(d => Math.abs(d.percentChange));
+
+            treemapLayout(root);
+
+            const colorScale = d3.scaleLinear()
+                .domain([-5, 0, 5])
+                .range(["#ff4136", "#ffffff", "#2ecc40"]);
+
+            const cells = svg.selectAll("g")
+                .data(root.leaves())
+                .enter().append("g")
+                .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+            cells.append("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                .attr("fill", d => colorScale(d.data.percentChange));
+
+            cells.append("text")
+                .attr("class", "heatmap-label")
+                .attr("x", d => (d.x1 - d.x0) / 2)
+                .attr("y", d => (d.y1 - d.y0) / 2)
+                .text(d => `${d.data.symbol}\n$${d.data.price.toFixed(2)}\n${d.data.percentChange.toFixed(2)}%`)
+                .call(wrap, d => d.x1 - d.x0);
+        }
+
+        function createFilingItem(filing) {
+            return `
+                <div class="filing-item">
+                    <h3>${filing.form || 'N/A'}</h3>
+                    <p>FILED ON: ${filing.filedDate ? new Date(filing.filedDate).toLocaleDateString() : 'N/A'}</p>
+                    <a href="${filing.url || '#'}" target="_blank">VIEW FILING</a>
+                </div>
+            `;
+        }
+
+        function createNewsItem(news) {
+            return `
+                <div class="news-item">
+                    <h3><a href="${news.url || '#'}" target="_blank">${news.headline || 'N/A'}</a></h3>
+                    <p>${news.summary || 'No summary available.'}</p>
+                    <p>SOURCE: ${news.source || 'N/A'} | ${news.datetime ? new Date(news.datetime * 1000).toLocaleDateString() : 'N/A'}</p>
+                </div>
+            `;
+        }
+
+        function wrap(text, width) {
+            text.each(function() {
+                let text = d3.select(this),
+                    words = text.text().split(/\n/),
+                    lineHeight = 1.1,
+                    y = text.attr("y"),
+                    dy = parseFloat(text.attr("dy") || 0);
+
+                text.text(null);
+
+                words.forEach((word, i) => {
+                    text.append("tspan")
+                        .attr("x", text.attr("x"))
+                        .attr("y", y)
+                        .attr("dy", `${i * lineHeight + dy}em`)
+                        .text(word);
+                });
+            });
+        }
+
+        // Initialize the heatmap on page load
+        createMarketHeatmap();
+    </script>
 </body>
 </html>
