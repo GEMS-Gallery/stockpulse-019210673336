@@ -19,16 +19,13 @@
             border: 1px solid #000;
             padding: 20px;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
         }
         .stock-info {
-            flex: 1;
-            min-width: 300px;
-            margin-right: 20px;
+            margin-bottom: 20px;
         }
         .heatmap {
-            flex: 2;
-            min-width: 500px;
+            margin-bottom: 20px;
         }
         h1, h2 {
             color: #000;
@@ -88,12 +85,12 @@
             <button onclick="getStockInfo()">GET STOCK INFO</button>
             <div id="result"></div>
             <div id="secFilings"></div>
-            <div id="companyNews"></div>
         </div>
         <div class="heatmap">
             <h2>Market Heatmap</h2>
             <div id="heatmapContainer"></div>
         </div>
+        <div id="companyNews"></div>
     </div>
 
     <script>
