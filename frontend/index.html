@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stock and Crypto Info with Heatmap</title>
+    <title>FinanceHub: Stock and Crypto Info</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         * {
@@ -21,10 +21,20 @@
         .container {
             border: 1px solid #000;
             padding: 20px;
+            position: relative;
+        }
+        .site-name {
+            position: absolute;
+            top: 10px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #000;
         }
         .tabs {
             display: flex;
             margin-bottom: 20px;
+            margin-top: 40px;
         }
         .tab {
             padding: 10px 20px;
@@ -118,6 +128,7 @@
 </head>
 <body>
     <div class="container">
+        <div class="site-name">FinanceHub</div>
         <div class="tabs">
             <div class="tab active" data-tab="stocks">Stocks</div>
             <div class="tab" data-tab="crypto">Crypto</div>
