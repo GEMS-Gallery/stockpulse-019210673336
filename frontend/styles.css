@@ -1,0 +1,133 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', Courier, monospace;
+    line-height: 1.6;
+    color: #000;
+    margin: 0;
+    padding: 20px;
+    background-color: #fff;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    border: 1px solid #000;
+    padding: 20px;
+}
+
+.tabs {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.tab {
+    padding: 10px 20px;
+    cursor: pointer;
+    border: 1px solid #000;
+    background-color: #fff;
+}
+
+.tab.active {
+    background-color: #000;
+    color: #fff;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.column {
+    flex: 1;
+    min-width: 300px;
+    padding: 0 10px;
+}
+
+.left-column {
+    border-right: 1px solid #000;
+}
+
+h1, h2 {
+    color: #000;
+    border-bottom: 1px solid #000;
+    padding-bottom: 5px;
+}
+
+input, button {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    font-family: 'Courier New', Courier, monospace;
+    border: 1px solid #000;
+}
+
+button {
+    background-color: #000;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+button:hover {
+    background-color: #333;
+}
+
+#result, #secFilings, #companyNews, #cryptoResult, #cryptoNews {
+    margin-top: 20px;
+}
+
+.filing-item, .news-item {
+    border: 1px solid #000;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+a {
+    color: #000;
+    text-decoration: none;
+    border-bottom: 1px solid #000;
+}
+
+a:hover {
+    background-color: #000;
+    color: #fff;
+}
+
+.heatmap-cell {
+    stroke: #fff;
+    stroke-width: 1px;
+}
+
+.heatmap-label {
+    font-size: 10px;
+    fill: #000;
+    text-anchor: middle;
+    dominant-baseline: middle;
+}
+
+@media (max-width: 768px) {
+    .tab-content.active {
+        flex-direction: column;
+    }
+
+    .left-column {
+        border-right: none;
+        border-bottom: 1px solid #000;
+    }
+
+    .column {
+        min-width: 100%;
+    }
+}
+
+svg {
+    max-width: 100%;
+    height: auto;
+}
