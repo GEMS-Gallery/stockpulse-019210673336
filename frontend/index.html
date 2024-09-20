@@ -6,6 +6,9 @@
     <title>Stock and Crypto Info with Heatmap</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
             font-family: 'Courier New', Courier, monospace;
             line-height: 1.6;
@@ -43,7 +46,7 @@
         .column {
             flex: 1;
             min-width: 300px;
-            padding: 0 10px;
+            padding: 0 20px;
         }
         .left-column {
             border-right: 1px solid #000;
@@ -63,7 +66,7 @@
             padding-bottom: 5px;
         }
         input, button {
-            width: 100%;
+            width: calc(100% - 20px);
             padding: 10px;
             margin: 10px 0;
             font-family: 'Courier New', Courier, monospace;
