@@ -252,11 +252,14 @@
         }
 
         function createFilingItem(filing) {
+            const secUrl = filing.accessNumber ? 
+                `https://www.sec.gov/Archives/edgar/data/${filing.cik}/${filing.accessNumber.replace(/-/g, '')}/${filing.accessNumber}-index.htm` :
+                '#';
             return `
                 <div class="filing-item">
                     <h3>${filing.form || 'N/A'}</h3>
                     <p>FILED ON: ${filing.filedDate ? new Date(filing.filedDate).toLocaleDateString() : 'N/A'}</p>
-                    <a href="${filing.url || '#'}" target="_blank">VIEW FILING</a>
+                    <a href="${secUrl}" target="_blank">VIEW FILING</a>
                 </div>
             `;
         }
