@@ -147,7 +147,8 @@
     </div>
 
     <script>
-        const API_KEY = 'crjpakpr01qnnbrso6l0crjpakpr01qnnbrso6lg';
+        const FINNHUB_API_KEY = 'crjpakpr01qnnbrso6l0crjpakpr01qnnbrso6lg';
+        const COINGECKO_API_KEY = 'CG-ycP7djd2AtjxSRKu6jWWoLpr';
 
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -156,9 +157,10 @@
             document.querySelector(`.tab:nth-child(${tabName === 'stocks' ? 1 : 2})`).classList.add('active');
         }
 
-        async function fetchData(url) {
+        async function fetchData(url, useCoingecko = false) {
             try {
-                const response = await fetch(url);
+                const headers = useCoingecko ? { 'x-cg-demo-api-key': COINGECKO_API_KEY } : {};
+                const response = await fetch(url, { headers });
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
@@ -183,10 +185,10 @@
 
             try {
                 const [profileData, quoteData, filingsData, newsData] = await Promise.all([
-                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${getDateString(30)}&to=${getDateString(0)}&token=${API_KEY}`)
+                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                    fetchData(`https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${getDateString(30)}&to=${getDateString(0)}&token=${FINNHUB_API_KEY}`)
                 ]);
 
                 displayStockInfo(profileData, quoteData, filingsData, newsData);
@@ -207,8 +209,8 @@
 
             try {
                 const [coinData, marketData] = await Promise.all([
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}`),
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}/market_chart?vs_currency=usd&days=1`)
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}`, true),
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}/market_chart?vs_currency=usd&days=1`, true)
                 ]);
 
                 displayCryptoInfo(coinData, marketData);
@@ -288,7 +290,7 @@
             try {
                 const symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'BRK.B', 'NVDA', 'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'BAC', 'MA', 'DIS', 'ADBE', 'CRM', 'NFLX'];
                 const stocksData = await Promise.all(symbols.map(async (symbol) => {
-                    const quoteData = await fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${API_KEY}`);
+                    const quoteData = await fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`);
                     return {
                         symbol: symbol,
                         price: quoteData?.c || 0,
@@ -310,7 +312,7 @@
             cryptoHeatmapContainer.innerHTML = 'LOADING CRYPTO HEATMAP...';
 
             try {
-                const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false');
+                const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false', true);
                 
                 const cryptoData = coinsData.map(coin => ({
                     symbol: coin.symbol.toUpperCase(),
