@@ -132,7 +132,7 @@
         <div id="cryptoTab" class="tab-content">
             <div class="left-column">
                 <h1>Crypto Information</h1>
-                <input type="text" id="cryptoInput" placeholder="Enter crypto symbol (e.g., bitcoin)">
+                <input type="text" id="cryptoInput" placeholder="Enter crypto name (e.g., bitcoin)">
                 <button onclick="getCryptoInfo()">GET CRYPTO INFO</button>
                 <div id="cryptoResult"></div>
             </div>
@@ -200,7 +200,7 @@
         }
 
         async function getCryptoInfo() {
-            const symbol = document.getElementById('cryptoInput').value.toLowerCase();
+            const cryptoName = document.getElementById('cryptoInput').value.toLowerCase();
             const resultDiv = document.getElementById('cryptoResult');
             const cryptoNewsDiv = document.getElementById('cryptoNews');
             
@@ -208,9 +208,17 @@
             cryptoNewsDiv.innerHTML = '';
 
             try {
+                // First, search for the coin to get its ID
+                const searchResult = await fetchData(`https://api.coingecko.com/api/v3/search?query=${cryptoName}`, true);
+                if (!searchResult || !searchResult.coins || searchResult.coins.length === 0) {
+                    throw new Error('Cryptocurrency not found');
+                }
+                const coinId = searchResult.coins[0].id;
+
+                // Now fetch the coin data and market chart using the correct ID
                 const [coinData, marketData] = await Promise.all([
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}`, true),
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}/market_chart?vs_currency=usd&days=1`, true)
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`, true),
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=1`, true)
                 ]);
 
                 displayCryptoInfo(coinData, marketData);
@@ -265,22 +273,78 @@
 
         function displayCryptoInfo(coinData, marketData) {
             const resultDiv = document.getElementById('cryptoResult');
-            const cryptoNewsDiv = document.getElementById('cryptoNews');
 
-            const currentPrice = coinData.market_data?.current_price?.usd ? `$${coinData.market_data.current_price.usd.toFixed(2)}` : 'PRICE NOT AVAILABLE';
-            const change24h = coinData.market_data?.price_change_24h ? coinData.market_data.price_change_24h.toFixed(2) : 'N/A';
-            const percentChange24h = coinData.market_data?.price_change_percentage_24h ? coinData.market_data.price_change_percentage_24h.toFixed(2) : 'N/A';
+            if (!coinData || !coinData.market_data) {
+                resultDiv.innerHTML = '<p>Error: Unable to fetch cryptocurrency data.</p>';
+                return;
+            }
+
+            const currentPrice = coinData.market_data.current_price?.usd ? `$${coinData.market_data.current_price.usd.toFixed(2)}` : 'PRICE NOT AVAILABLE';
+            const change24h = coinData.market_data.price_change_24h ? coinData.market_data.price_change_24h.toFixed(2) : 'N/A';
+            const percentChange24h = coinData.market_data.price_change_percentage_24h ? coinData.market_data.price_change_percentage_24h.toFixed(2) : 'N/A';
 
             resultDiv.innerHTML = `
                 <h2>${coinData.name} (${coinData.symbol.toUpperCase()})</h2>
                 <p>CURRENT PRICE: ${currentPrice}</p>
                 <p>24H CHANGE: $${change24h} (${percentChange24h}%)</p>
-                <p>MARKET CAP: $${coinData.market_data?.market_cap?.usd.toLocaleString() || 'N/A'}</p>
-                <p>24H TRADING VOLUME: $${coinData.market_data?.total_volume?.usd.toLocaleString() || 'N/A'}</p>
+                <p>MARKET CAP: $${coinData.market_data.market_cap?.usd.toLocaleString() || 'N/A'}</p>
+                <p>24H TRADING VOLUME: $${coinData.market_data.total_volume?.usd.toLocaleString() || 'N/A'}</p>
             `;
 
-            // CoinGecko doesn't provide news data, so we'll remove this section
-            cryptoNewsDiv.innerHTML = '';
+            // Add chart data if available
+            if (marketData && marketData.prices) {
+                const chartData = marketData.prices.map(([timestamp, price]) => ({
+                    date: new Date(timestamp),
+                    price: price
+                }));
+                createPriceChart(chartData, coinData.name);
+            }
+        }
+
+        function createPriceChart(data, coinName) {
+            const margin = {top: 20, right: 20, bottom: 30, left: 50};
+            const width = 460 - margin.left - margin.right;
+            const height = 400 - margin.top - margin.bottom;
+
+            const svg = d3.select("#cryptoResult")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleTime()
+                .domain(d3.extent(data, d => d.date))
+                .range([0, width]);
+
+            const y = d3.scaleLinear()
+                .domain([d3.min(data, d => d.price), d3.max(data, d => d.price)])
+                .range([height, 0]);
+
+            const line = d3.line()
+                .x(d => x(d.date))
+                .y(d => y(d.price));
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            svg.append("path")
+                .datum(data)
+                .attr("fill", "none")
+                .attr("stroke", "steelblue")
+                .attr("stroke-width", 1.5)
+                .attr("d", line);
+
+            svg.append("text")
+                .attr("x", (width / 2))
+                .attr("y", 0 - (margin.top / 2))
+                .attr("text-anchor", "middle")
+                .style("font-size", "16px")
+                .text(`${coinName} Price (Last 24 Hours)`);
         }
 
         async function createMarketHeatmap() {
