@@ -132,7 +132,7 @@
         <div id="cryptoTab" class="tab-content">
             <div class="left-column">
                 <h1>Crypto Information</h1>
-                <input type="text" id="cryptoInput" placeholder="Enter crypto name (e.g., bitcoin)">
+                <input type="text" id="cryptoInput" placeholder="Enter crypto symbol (e.g., BTC, ICP, ETH)">
                 <button onclick="getCryptoInfo()">GET CRYPTO INFO</button>
                 <div id="cryptoResult"></div>
             </div>
@@ -200,7 +200,7 @@
         }
 
         async function getCryptoInfo() {
-            const cryptoName = document.getElementById('cryptoInput').value.toLowerCase();
+            const symbol = document.getElementById('cryptoInput').value.toUpperCase();
             const resultDiv = document.getElementById('cryptoResult');
             const cryptoNewsDiv = document.getElementById('cryptoNews');
             
@@ -208,20 +208,17 @@
             cryptoNewsDiv.innerHTML = '';
 
             try {
-                // First, search for the coin to get its ID
-                const searchResult = await fetchData(`https://api.coingecko.com/api/v3/search?query=${cryptoName}`, true);
-                if (!searchResult || !searchResult.coins || searchResult.coins.length === 0) {
+                // Fetch crypto data using the symbol
+                const coinData = await fetchData(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${symbol.toLowerCase()}&order=market_cap_desc&per_page=1&page=1&sparkline=false`, true);
+
+                if (!coinData || coinData.length === 0) {
                     throw new Error('Cryptocurrency not found');
                 }
-                const coinId = searchResult.coins[0].id;
 
-                // Now fetch the coin data and market chart using the correct ID
-                const [coinData, marketData] = await Promise.all([
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`, true),
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=1`, true)
-                ]);
+                const coin = coinData[0];
+                const marketData = await fetchData(`https://api.coingecko.com/api/v3/coins/${coin.id}/market_chart?vs_currency=usd&days=1`, true);
 
-                displayCryptoInfo(coinData, marketData);
+                displayCryptoInfo(coin, marketData);
 
             } catch (error) {
                 resultDiv.innerHTML = `ERROR: ${error.message}. PLEASE TRY AGAIN LATER.`;
@@ -274,21 +271,21 @@
         function displayCryptoInfo(coinData, marketData) {
             const resultDiv = document.getElementById('cryptoResult');
 
-            if (!coinData || !coinData.market_data) {
+            if (!coinData) {
                 resultDiv.innerHTML = '<p>Error: Unable to fetch cryptocurrency data.</p>';
                 return;
             }
 
-            const currentPrice = coinData.market_data.current_price?.usd ? `$${coinData.market_data.current_price.usd.toFixed(2)}` : 'PRICE NOT AVAILABLE';
-            const change24h = coinData.market_data.price_change_24h ? coinData.market_data.price_change_24h.toFixed(2) : 'N/A';
-            const percentChange24h = coinData.market_data.price_change_percentage_24h ? coinData.market_data.price_change_percentage_24h.toFixed(2) : 'N/A';
+            const currentPrice = coinData.current_price ? `$${coinData.current_price.toFixed(2)}` : 'PRICE NOT AVAILABLE';
+            const change24h = coinData.price_change_24h ? coinData.price_change_24h.toFixed(2) : 'N/A';
+            const percentChange24h = coinData.price_change_percentage_24h ? coinData.price_change_percentage_24h.toFixed(2) : 'N/A';
 
             resultDiv.innerHTML = `
                 <h2>${coinData.name} (${coinData.symbol.toUpperCase()})</h2>
                 <p>CURRENT PRICE: ${currentPrice}</p>
                 <p>24H CHANGE: $${change24h} (${percentChange24h}%)</p>
-                <p>MARKET CAP: $${coinData.market_data.market_cap?.usd.toLocaleString() || 'N/A'}</p>
-                <p>24H TRADING VOLUME: $${coinData.market_data.total_volume?.usd.toLocaleString() || 'N/A'}</p>
+                <p>MARKET CAP: $${coinData.market_cap?.toLocaleString() || 'N/A'}</p>
+                <p>24H TRADING VOLUME: $${coinData.total_volume?.toLocaleString() || 'N/A'}</p>
             `;
 
             // Add chart data if available
