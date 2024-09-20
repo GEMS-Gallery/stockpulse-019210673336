@@ -132,7 +132,7 @@
         <div id="cryptoTab" class="tab-content">
             <div class="left-column">
                 <h1>Crypto Information</h1>
-                <input type="text" id="cryptoInput" placeholder="Enter crypto symbol (e.g., BTC)">
+                <input type="text" id="cryptoInput" placeholder="Enter crypto symbol (e.g., bitcoin)">
                 <button onclick="getCryptoInfo()">GET CRYPTO INFO</button>
                 <div id="cryptoResult"></div>
             </div>
@@ -198,7 +198,7 @@
         }
 
         async function getCryptoInfo() {
-            const symbol = document.getElementById('cryptoInput').value.toUpperCase();
+            const symbol = document.getElementById('cryptoInput').value.toLowerCase();
             const resultDiv = document.getElementById('cryptoResult');
             const cryptoNewsDiv = document.getElementById('cryptoNews');
             
@@ -206,12 +206,12 @@
             cryptoNewsDiv.innerHTML = '';
 
             try {
-                const [quoteData, newsData] = await Promise.all([
-                    fetchData(`https://finnhub.io/api/v1/quote?symbol=BINANCE:${symbol}USDT&token=${API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/news?category=crypto&token=${API_KEY}`)
+                const [coinData, marketData] = await Promise.all([
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}`),
+                    fetchData(`https://api.coingecko.com/api/v3/coins/${symbol}/market_chart?vs_currency=usd&days=1`)
                 ]);
 
-                displayCryptoInfo(symbol, quoteData, newsData);
+                displayCryptoInfo(coinData, marketData);
 
             } catch (error) {
                 resultDiv.innerHTML = `ERROR: ${error.message}. PLEASE TRY AGAIN LATER.`;
@@ -261,28 +261,24 @@
             }
         }
 
-        function displayCryptoInfo(symbol, quoteData, newsData) {
+        function displayCryptoInfo(coinData, marketData) {
             const resultDiv = document.getElementById('cryptoResult');
             const cryptoNewsDiv = document.getElementById('cryptoNews');
 
-            const currentPrice = quoteData?.c ? `$${quoteData.c.toFixed(2)}` : 'PRICE NOT AVAILABLE';
-            const change = quoteData?.d != null ? quoteData.d.toFixed(2) : 'N/A';
-            const percentChange = quoteData?.dp != null ? quoteData.dp.toFixed(2) : 'N/A';
+            const currentPrice = coinData.market_data?.current_price?.usd ? `$${coinData.market_data.current_price.usd.toFixed(2)}` : 'PRICE NOT AVAILABLE';
+            const change24h = coinData.market_data?.price_change_24h ? coinData.market_data.price_change_24h.toFixed(2) : 'N/A';
+            const percentChange24h = coinData.market_data?.price_change_percentage_24h ? coinData.market_data.price_change_percentage_24h.toFixed(2) : 'N/A';
 
             resultDiv.innerHTML = `
-                <h2>${symbol}</h2>
+                <h2>${coinData.name} (${coinData.symbol.toUpperCase()})</h2>
                 <p>CURRENT PRICE: ${currentPrice}</p>
-                <p>CHANGE: ${change} (${percentChange}%)</p>
+                <p>24H CHANGE: $${change24h} (${percentChange24h}%)</p>
+                <p>MARKET CAP: $${coinData.market_data?.market_cap?.usd.toLocaleString() || 'N/A'}</p>
+                <p>24H TRADING VOLUME: $${coinData.market_data?.total_volume?.usd.toLocaleString() || 'N/A'}</p>
             `;
 
-            cryptoNewsDiv.innerHTML = '<h2>LATEST CRYPTO NEWS</h2>';
-            if (newsData && newsData.length > 0) {
-                newsData.slice(0, 5).forEach(news => {
-                    cryptoNewsDiv.innerHTML += createNewsItem(news);
-                });
-            } else {
-                cryptoNewsDiv.innerHTML += '<p>NO RECENT NEWS AVAILABLE.</p>';
-            }
+            // CoinGecko doesn't provide news data, so we'll remove this section
+            cryptoNewsDiv.innerHTML = '';
         }
 
         async function createMarketHeatmap() {
@@ -314,18 +310,16 @@
             cryptoHeatmapContainer.innerHTML = 'LOADING CRYPTO HEATMAP...';
 
             try {
-                const symbols = ['BTC', 'ETH', 'BNB', 'ADA', 'XRP', 'SOL', 'DOT', 'DOGE', 'AVAX', 'LUNA'];
-                const cryptoData = await Promise.all(symbols.map(async (symbol) => {
-                    const quoteData = await fetchData(`https://finnhub.io/api/v1/quote?symbol=BINANCE:${symbol}USDT&token=${API_KEY}`);
-                    return {
-                        symbol: symbol,
-                        price: quoteData?.c || 0,
-                        change: quoteData?.d || 0,
-                        percentChange: quoteData?.dp || 0
-                    };
+                const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false');
+                
+                const cryptoData = coinsData.map(coin => ({
+                    symbol: coin.symbol.toUpperCase(),
+                    price: coin.current_price,
+                    change: coin.price_change_24h,
+                    percentChange: coin.price_change_percentage_24h
                 }));
 
-                createHeatmap(cryptoData.filter(crypto => crypto.price > 0), 'cryptoHeatmapContainer');
+                createHeatmap(cryptoData, 'cryptoHeatmapContainer');
 
             } catch (error) {
                 cryptoHeatmapContainer.innerHTML = `ERROR LOADING CRYPTO HEATMAP: ${error.message}`;
