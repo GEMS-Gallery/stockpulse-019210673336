@@ -1,0 +1,11 @@
+type Stock = 
+ record {
+   name: text;
+   price: float64;
+   symbol: text;
+ };
+service : {
+  addStock: (text, text, float64) -> ();
+  getAllStocks: () -> (vec Stock) query;
+  updateStockPrice: (text, float64) -> ();
+}

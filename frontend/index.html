@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Information App</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Stock Information App</h1>
+        
+        <form id="addStockForm">
+            <input type="text" id="symbol" placeholder="Stock Symbol" required>
+            <input type="text" id="name" placeholder="Stock Name" required>
+            <input type="number" id="price" placeholder="Stock Price" step="0.01" required>
+            <button type="submit">Add Stock</button>
+        </form>
+
+        <button id="updatePrices">Update Prices</button>
+
+        <table id="stockTable">
+            <thead>
+                <tr>
+                    <th>Symbol</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                </tr>
+            </thead>
+            <tbody id="stockList"></tbody>
+        </table>
+    </div>
+
+    <script src="index.js"></script>
+</body>
+</html>
