@@ -124,6 +124,11 @@
             font-weight: bold;
             margin-top: 20px;
         }
+        #heatmapContainer, #cryptoHeatmapContainer {
+            width: 100%;
+            height: 600px;
+            overflow: auto;
+        }
     </style>
 </head>
 <body>
@@ -170,6 +175,9 @@
     <script>
         const FINNHUB_API_KEY = 'crjpakpr01qnnbrso6l0crjpakpr01qnnbrso6lg';
         const COINGECKO_API_KEY = 'CG-ycP7djd2AtjxSRKu6jWWoLpr';
+        const API_CALL_INTERVAL = 1000; // 1 second between API calls
+        let apiQueue = [];
+        let isProcessingQueue = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             const tabs = document.querySelectorAll('.tab');
@@ -200,19 +208,41 @@
         }
 
         async function fetchData(url, useCoingecko = false) {
-            try {
-                const headers = useCoingecko ? { 'x-cg-demo-api-key': COINGECKO_API_KEY } : {};
-                const response = await fetch(url, { headers });
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+            return new Promise((resolve, reject) => {
+                apiQueue.push({ url, useCoingecko, resolve, reject });
+                processQueue();
+            });
+        }
+
+        async function processQueue() {
+            if (isProcessingQueue || apiQueue.length === 0) return;
+            isProcessingQueue = true;
+
+            while (apiQueue.length > 0) {
+                const { url, useCoingecko, resolve, reject } = apiQueue.shift();
+                try {
+                    const headers = useCoingecko ? { 'x-cg-demo-api-key': COINGECKO_API_KEY } : {};
+                    const response = await fetch(url, { headers });
+                    if (!response.ok) {
+                        if (response.status === 429) {
+                            console.log('Rate limit reached. Waiting before retrying...');
+                            apiQueue.unshift({ url, useCoingecko, resolve, reject });
+                            await new Promise(r => setTimeout(r, 5000)); // Wait 5 seconds before retrying
+                            continue;
+                        }
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    console.log('Fetched data:', data);
+                    resolve(data);
+                } catch (error) {
+                    console.error('Fetch error:', error);
+                    reject(error);
                 }
-                const data = await response.json();
-                console.log('Fetched data:', data);
-                return data;
-            } catch (error) {
-                console.error('Fetch error:', error);
-                throw error;
+                await new Promise(r => setTimeout(r, API_CALL_INTERVAL));
             }
+
+            isProcessingQueue = false;
         }
 
         async function getStockInfo() {
@@ -409,18 +439,42 @@
             heatmapContainer.innerHTML = 'LOADING MARKET HEATMAP...';
 
             try {
-                const symbols = ['AAPL', 'MSFT', 'AMZN', 'GOOGL', 'FB', 'TSLA', 'BRK.B', 'NVDA', 'JPM', 'JNJ', 'V', 'PG', 'UNH', 'HD', 'BAC', 'MA', 'DIS', 'ADBE', 'CRM', 'NFLX'];
-                const stocksData = await Promise.all(symbols.map(async (symbol) => {
-                    const quoteData = await fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`);
-                    return {
-                        symbol: symbol,
-                        price: quoteData?.c || 0,
-                        change: quoteData?.d || 0,
-                        percentChange: quoteData?.dp || 0
-                    };
-                }));
+                const sectors = {
+                    'Technology': ['AAPL', 'MSFT', 'GOOGL', 'FB', 'NVDA', 'ADBE', 'CRM', 'INTC', 'CSCO', 'AMD'],
+                    'Finance': ['JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'AXP', 'BLK', 'SCHW', 'USB'],
+                    'Healthcare': ['JNJ', 'UNH', 'PFE', 'MRK', 'ABT', 'TMO', 'ABBV', 'DHR', 'BMY', 'AMGN'],
+                    'Consumer': ['AMZN', 'WMT', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'COST', 'PEP', 'KO'],
+                    'Industrial': ['BA', 'GE', 'HON', 'UPS', 'CAT', 'LMT', 'MMM', 'UNP', 'RTX', 'FDX'],
+                    'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'KMI'],
+                    'Real Estate': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'SPG', 'WELL', 'AVB', 'EQR']
+                };
 
-                createHeatmap(stocksData.filter(stock => stock.price > 0), 'heatmapContainer');
+                const stocksData = await Promise.all(
+                    Object.entries(sectors).flatMap(([sector, symbols]) =>
+                        symbols.map(async (symbol) => {
+                            try {
+                                const [profileData, quoteData] = await Promise.all([
+                                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
+                                ]);
+                                return {
+                                    symbol: symbol,
+                                    sector: sector,
+                                    price: quoteData?.c || 0,
+                                    change: quoteData?.d || 0,
+                                    percentChange: quoteData?.dp || 0,
+                                    name: profileData?.name || symbol
+                                };
+                            } catch (error) {
+                                console.error(`Error fetching data for ${symbol}:`, error);
+                                return null;
+                            }
+                        })
+                    )
+                );
+
+                const validStocksData = stocksData.filter(stock => stock !== null && stock.price > 0);
+                createHeatmap(validStocksData, 'heatmapContainer');
             } catch (error) {
                 heatmapContainer.innerHTML = `ERROR LOADING HEATMAP: ${error.message}`;
                 console.error('Heatmap error:', error);
@@ -432,28 +486,30 @@
             cryptoHeatmapContainer.innerHTML = 'LOADING CRYPTO HEATMAP...';
 
             try {
-                const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=false', true);
+                const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false', true);
                 
                 const cryptoData = coinsData.map(coin => ({
                     symbol: coin.symbol.toUpperCase(),
+                    name: coin.name,
                     price: coin.current_price,
                     change: coin.price_change_24h,
-                    percentChange: coin.price_change_percentage_24h
+                    percentChange: coin.price_change_percentage_24h,
+                    marketCap: coin.market_cap
                 }));
 
-                createHeatmap(cryptoData, 'cryptoHeatmapContainer');
+                createHeatmap(cryptoData, 'cryptoHeatmapContainer', 'marketCap');
             } catch (error) {
                 cryptoHeatmapContainer.innerHTML = `ERROR LOADING CRYPTO HEATMAP: ${error.message}`;
                 console.error('Crypto Heatmap error:', error);
             }
         }
 
-        function createHeatmap(data, containerId) {
+        function createHeatmap(data, containerId, sizeMetric = 'percentChange') {
             const container = document.getElementById(containerId);
             const containerWidth = container.offsetWidth;
             const margin = { top: 20, right: 20, bottom: 20, left: 20 };
             const width = containerWidth - margin.left - margin.right;
-            const height = 300 - margin.top - margin.bottom;
+            const height = 600 - margin.top - margin.bottom;
 
             d3.select(`#${containerId}`).selectAll("*").remove();
 
@@ -464,17 +520,18 @@
                 .append("g")
                 .attr("transform", `translate(${margin.left},${margin.top})`);
 
+            const root = d3.hierarchy({ children: data })
+                .sum(d => Math.abs(d[sizeMetric]));
+
             const treemapLayout = d3.treemap()
                 .size([width, height])
-                .padding(1);
-
-            const root = d3.hierarchy({ children: data })
-                .sum(d => Math.abs(d.percentChange));
+                .padding(1)
+                .round(true);
 
             treemapLayout(root);
 
             const colorScale = d3.scaleLinear()
-                .domain([-5, 0, 5])
+                .domain([-10, 0, 10])
                 .range(["#ff4136", "#ffffff", "#2ecc40"]);
 
             const cells = svg.selectAll("g")
@@ -491,8 +548,25 @@
                 .attr("class", "heatmap-label")
                 .attr("x", d => (d.x1 - d.x0) / 2)
                 .attr("y", d => (d.y1 - d.y0) / 2)
-                .text(d => `${d.data.symbol}\n$${d.data.price.toFixed(2)}\n${d.data.percentChange.toFixed(2)}%`)
+                .text(d => `${d.data.symbol}\n${d.data.percentChange.toFixed(2)}%`)
                 .call(wrap, d => d.x1 - d.x0);
+
+            if (containerId === 'heatmapContainer') {
+                const sectors = Array.from(new Set(data.map(d => d.sector)));
+                const sectorScale = d3.scaleBand()
+                    .domain(sectors)
+                    .range([0, width]);
+
+                svg.append("g")
+                    .selectAll("text")
+                    .data(sectors)
+                    .enter().append("text")
+                    .attr("x", d => sectorScale(d) + sectorScale.bandwidth() / 2)
+                    .attr("y", 0)
+                    .attr("dy", "-0.5em")
+                    .attr("text-anchor", "middle")
+                    .text(d => d);
+            }
         }
 
         function createFilingItem(filing) {
