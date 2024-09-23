@@ -75,7 +75,7 @@
             border-bottom: 1px solid #000;
             padding-bottom: 5px;
         }
-        input, button {
+        input, button, select {
             width: calc(100% - 20px);
             padding: 10px;
             margin: 10px 0;
@@ -124,10 +124,11 @@
             font-weight: bold;
             margin-top: 20px;
         }
-        #heatmapContainer, #cryptoHeatmapContainer {
+        .heatmapContainer {
             width: 100%;
-            height: 600px;
+            height: 300px;
             overflow: auto;
+            margin-bottom: 20px;
         }
         .error-message {
             color: red;
@@ -152,8 +153,17 @@
             </div>
             <div class="column right-column">
                 <div class="heatmap">
-                    <h2>Stock Market Heatmap</h2>
-                    <div id="heatmapContainer"></div>
+                    <h2>Stock Market Heatmaps</h2>
+                    <select id="sectorSelect">
+                        <option value="Technology">Technology</option>
+                        <option value="Finance">Finance</option>
+                        <option value="Healthcare">Healthcare</option>
+                        <option value="Consumer">Consumer</option>
+                        <option value="Industrial">Industrial</option>
+                        <option value="Energy">Energy</option>
+                        <option value="Real Estate">Real Estate</option>
+                    </select>
+                    <div id="heatmapContainer" class="heatmapContainer"></div>
                 </div>
                 <div id="companyNews"></div>
             </div>
@@ -168,7 +178,7 @@
             <div class="column right-column">
                 <div class="heatmap">
                     <h2>Crypto Market Heatmap</h2>
-                    <div id="cryptoHeatmapContainer"></div>
+                    <div id="cryptoHeatmapContainer" class="heatmapContainer"></div>
                 </div>
                 <div id="cryptoNews"></div>
             </div>
@@ -184,12 +194,23 @@
         let isProcessingQueue = false;
         const cache = new Map();
 
+        const sectors = {
+            'Technology': ['AAPL', 'MSFT', 'GOOGL', 'FB', 'NVDA', 'ADBE', 'CRM', 'INTC', 'CSCO', 'AMD'],
+            'Finance': ['JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'AXP', 'BLK', 'SCHW', 'USB'],
+            'Healthcare': ['JNJ', 'UNH', 'PFE', 'MRK', 'ABT', 'TMO', 'ABBV', 'DHR', 'BMY', 'AMGN'],
+            'Consumer': ['AMZN', 'WMT', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'COST', 'PEP', 'KO'],
+            'Industrial': ['BA', 'GE', 'HON', 'UPS', 'CAT', 'LMT', 'MMM', 'UNP', 'RTX', 'FDX'],
+            'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'KMI'],
+            'Real Estate': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'SPG', 'WELL', 'AVB', 'EQR']
+        };
+
         document.addEventListener('DOMContentLoaded', () => {
             const tabs = document.querySelectorAll('.tab');
             const tabContents = document.querySelectorAll('.tab-content');
             const getStockInfoButton = document.getElementById('getStockInfo');
             const getCryptoInfoButton = document.getElementById('getCryptoInfo');
             const loadingIndicator = document.getElementById('loading');
+            const sectorSelect = document.getElementById('sectorSelect');
 
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
@@ -200,8 +221,9 @@
 
             getStockInfoButton.addEventListener('click', getStockInfo);
             getCryptoInfoButton.addEventListener('click', getCryptoInfo);
+            sectorSelect.addEventListener('change', () => createMarketHeatmap(sectorSelect.value));
 
-            createMarketHeatmap();
+            createMarketHeatmap(sectorSelect.value);
             createCryptoHeatmap();
         });
 
@@ -446,43 +468,31 @@
                 .text(`${coinName} Price (Last 24 Hours)`);
         }
 
-        async function createMarketHeatmap() {
+        async function createMarketHeatmap(selectedSector) {
             const heatmapContainer = document.getElementById('heatmapContainer');
-            heatmapContainer.innerHTML = 'LOADING MARKET HEATMAP...';
+            heatmapContainer.innerHTML = `LOADING ${selectedSector.toUpperCase()} HEATMAP...`;
 
             try {
-                const sectors = {
-                    'Technology': ['AAPL', 'MSFT', 'GOOGL', 'FB', 'NVDA', 'ADBE', 'CRM', 'INTC', 'CSCO', 'AMD'],
-                    'Finance': ['JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'AXP', 'BLK', 'SCHW', 'USB'],
-                    'Healthcare': ['JNJ', 'UNH', 'PFE', 'MRK', 'ABT', 'TMO', 'ABBV', 'DHR', 'BMY', 'AMGN'],
-                    'Consumer': ['AMZN', 'WMT', 'HD', 'MCD', 'NKE', 'SBUX', 'TGT', 'COST', 'PEP', 'KO'],
-                    'Industrial': ['BA', 'GE', 'HON', 'UPS', 'CAT', 'LMT', 'MMM', 'UNP', 'RTX', 'FDX'],
-                    'Energy': ['XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'KMI'],
-                    'Real Estate': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'SPG', 'WELL', 'AVB', 'EQR']
-                };
-
                 const stocksData = [];
-                for (const [sector, symbols] of Object.entries(sectors)) {
-                    for (const symbol of symbols) {
-                        try {
-                            const [profileData, quoteData] = await Promise.all([
-                                fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-                                fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
-                            ]);
-                            stocksData.push({
-                                symbol: symbol,
-                                sector: sector,
-                                price: quoteData?.c || 0,
-                                change: quoteData?.d || 0,
-                                percentChange: quoteData?.dp || 0,
-                                name: profileData?.name || symbol
-                            });
-                            createHeatmap(stocksData, 'heatmapContainer');
-                        } catch (error) {
-                            console.error(`Error fetching data for ${symbol}:`, error);
-                        }
+                for (const symbol of sectors[selectedSector]) {
+                    try {
+                        const [profileData, quoteData] = await Promise.all([
+                            fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                            fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
+                        ]);
+                        stocksData.push({
+                            symbol: symbol,
+                            sector: selectedSector,
+                            price: quoteData?.c || 0,
+                            change: quoteData?.d || 0,
+                            percentChange: quoteData?.dp || 0,
+                            name: profileData?.name || symbol
+                        });
+                    } catch (error) {
+                        console.error(`Error fetching data for ${symbol}:`, error);
                     }
                 }
+                createHeatmap(stocksData, 'heatmapContainer');
             } catch (error) {
                 heatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING HEATMAP: ${error.message}</p>`;
                 console.error('Heatmap error:', error);
@@ -517,7 +527,7 @@
             const containerWidth = container.offsetWidth;
             const margin = { top: 20, right: 20, bottom: 20, left: 20 };
             const width = containerWidth - margin.left - margin.right;
-            const height = 600 - margin.top - margin.bottom;
+            const height = 300 - margin.top - margin.bottom;
 
             d3.select(`#${containerId}`).selectAll("*").remove();
 
@@ -558,23 +568,6 @@
                 .attr("y", d => (d.y1 - d.y0) / 2)
                 .text(d => `${d.data.symbol}\n${d.data.percentChange.toFixed(2)}%`)
                 .call(wrap, d => d.x1 - d.x0);
-
-            if (containerId === 'heatmapContainer') {
-                const sectors = Array.from(new Set(data.map(d => d.sector)));
-                const sectorScale = d3.scaleBand()
-                    .domain(sectors)
-                    .range([0, width]);
-
-                svg.append("g")
-                    .selectAll("text")
-                    .data(sectors)
-                    .enter().append("text")
-                    .attr("x", d => sectorScale(d) + sectorScale.bandwidth() / 2)
-                    .attr("y", 0)
-                    .attr("dy", "-0.5em")
-                    .attr("text-anchor", "middle")
-                    .text(d => d);
-            }
         }
 
         function createFilingItem(filing) {
