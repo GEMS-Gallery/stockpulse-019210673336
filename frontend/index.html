@@ -182,6 +182,7 @@
         const API_CALL_INTERVAL = 1000; // 1 second between API calls
         let apiQueue = [];
         let isProcessingQueue = false;
+        const cache = new Map();
 
         document.addEventListener('DOMContentLoaded', () => {
             const tabs = document.querySelectorAll('.tab');
@@ -212,6 +213,10 @@
         }
 
         async function fetchData(url, useCoingecko = false) {
+            if (cache.has(url)) {
+                return cache.get(url);
+            }
+
             return new Promise((resolve, reject) => {
                 apiQueue.push({ url, useCoingecko, resolve, reject });
                 processQueue();
@@ -238,6 +243,7 @@
                     }
                     const data = await response.json();
                     console.log('Fetched data:', data);
+                    cache.set(url, data);
                     resolve(data);
                 } catch (error) {
                     console.error('Fetch error:', error);
@@ -262,16 +268,19 @@
             loadingIndicator.style.display = 'block';
 
             try {
-                const [profileData, quoteData, filingsData, newsData] = await Promise.all([
-                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-                    fetchData(`https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${getDateString(30)}&to=${getDateString(0)}&token=${FINNHUB_API_KEY}`)
-                ]);
+                const profilePromise = fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`);
+                const quotePromise = fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`);
+                const filingsPromise = fetchData(`https://finnhub.io/api/v1/stock/filings?symbol=${symbol}&token=${FINNHUB_API_KEY}`);
+                const newsPromise = fetchData(`https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${getDateString(30)}&to=${getDateString(0)}&token=${FINNHUB_API_KEY}`);
 
-                displayStockInfo(profileData, quoteData, filingsData, newsData);
+                const [profileData, quoteData] = await Promise.all([profilePromise, quotePromise]);
+                displayStockInfo(profileData, quoteData);
+
+                const [filingsData, newsData] = await Promise.all([filingsPromise, newsPromise]);
+                displaySecFilings(filingsData);
+                displayCompanyNews(newsData);
             } catch (error) {
-                resultDiv.innerHTML = `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
+                resultDiv.innerHTML += `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
                 console.error('Detailed error:', error);
             } finally {
                 loadingIndicator.style.display = 'none';
@@ -289,27 +298,23 @@
             loadingIndicator.style.display = 'block';
 
             try {
-                // First, search for the coin using the symbol
                 const searchResult = await fetchData(`https://api.coingecko.com/api/v3/search?query=${symbol}`, true);
                 if (!searchResult || !searchResult.coins || searchResult.coins.length === 0) {
                     throw new Error('Cryptocurrency not found');
                 }
 
-                // Find the coin with the matching symbol
                 const coin = searchResult.coins.find(c => c.symbol.toUpperCase() === symbol);
                 if (!coin) {
                     throw new Error('Cryptocurrency not found');
                 }
 
-                // Fetch detailed coin data and market chart using the coin ID
-                const [coinData, marketData] = await Promise.all([
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`, true),
-                    fetchData(`https://api.coingecko.com/api/v3/coins/${coin.id}/market_chart?vs_currency=usd&days=1`, true)
-                ]);
+                const coinDataPromise = fetchData(`https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`, true);
+                const marketDataPromise = fetchData(`https://api.coingecko.com/api/v3/coins/${coin.id}/market_chart?vs_currency=usd&days=1`, true);
 
+                const [coinData, marketData] = await Promise.all([coinDataPromise, marketDataPromise]);
                 displayCryptoInfo(coinData, marketData);
             } catch (error) {
-                resultDiv.innerHTML = `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
+                resultDiv.innerHTML += `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
                 console.error('Detailed error:', error);
             } finally {
                 loadingIndicator.style.display = 'none';
@@ -322,10 +327,8 @@
             return date.toISOString().split('T')[0];
         }
 
-        function displayStockInfo(profileData, quoteData, filingsData, newsData) {
+        function displayStockInfo(profileData, quoteData) {
             const resultDiv = document.getElementById('result');
-            const secFilingsDiv = document.getElementById('secFilings');
-            const companyNewsDiv = document.getElementById('companyNews');
 
             const companyName = profileData?.name || 'COMPANY NAME NOT AVAILABLE';
             const currentPrice = quoteData?.c ? `$${quoteData.c.toFixed(2)}` : 'PRICE NOT AVAILABLE';
@@ -338,7 +341,10 @@
                 <p>CHANGE: ${change} (${percentChange}%)</p>
                 <p>SECTOR: ${profileData?.finnhubIndustry || 'N/A'}</p>
             `;
+        }
 
+        function displaySecFilings(filingsData) {
+            const secFilingsDiv = document.getElementById('secFilings');
             secFilingsDiv.innerHTML = '<h2>RECENT SEC FILINGS</h2>';
             if (filingsData && filingsData.length > 0) {
                 filingsData.slice(0, 5).forEach(filing => {
@@ -347,7 +353,10 @@
             } else {
                 secFilingsDiv.innerHTML += '<p>NO SEC FILINGS AVAILABLE.</p>';
             }
+        }
 
+        function displayCompanyNews(newsData) {
+            const companyNewsDiv = document.getElementById('companyNews');
             companyNewsDiv.innerHTML = '<h2>LATEST COMPANY NEWS</h2>';
             if (newsData && newsData.length > 0) {
                 newsData.slice(0, 5).forEach(news => {
@@ -378,7 +387,6 @@
                 <p>24H TRADING VOLUME: $${coinData.market_data.total_volume?.usd.toLocaleString() || 'N/A'}</p>
             `;
 
-            // Add chart data if available
             if (marketData && marketData.prices) {
                 const chartData = marketData.prices.map(([timestamp, price]) => ({
                     date: new Date(timestamp),
@@ -453,32 +461,28 @@
                     'Real Estate': ['AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'DLR', 'SPG', 'WELL', 'AVB', 'EQR']
                 };
 
-                const stocksData = await Promise.all(
-                    Object.entries(sectors).flatMap(([sector, symbols]) =>
-                        symbols.map(async (symbol) => {
-                            try {
-                                const [profileData, quoteData] = await Promise.all([
-                                    fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
-                                    fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
-                                ]);
-                                return {
-                                    symbol: symbol,
-                                    sector: sector,
-                                    price: quoteData?.c || 0,
-                                    change: quoteData?.d || 0,
-                                    percentChange: quoteData?.dp || 0,
-                                    name: profileData?.name || symbol
-                                };
-                            } catch (error) {
-                                console.error(`Error fetching data for ${symbol}:`, error);
-                                return null;
-                            }
-                        })
-                    )
-                );
-
-                const validStocksData = stocksData.filter(stock => stock !== null && stock.price > 0);
-                createHeatmap(validStocksData, 'heatmapContainer');
+                const stocksData = [];
+                for (const [sector, symbols] of Object.entries(sectors)) {
+                    for (const symbol of symbols) {
+                        try {
+                            const [profileData, quoteData] = await Promise.all([
+                                fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
+                                fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
+                            ]);
+                            stocksData.push({
+                                symbol: symbol,
+                                sector: sector,
+                                price: quoteData?.c || 0,
+                                change: quoteData?.d || 0,
+                                percentChange: quoteData?.dp || 0,
+                                name: profileData?.name || symbol
+                            });
+                            createHeatmap(stocksData, 'heatmapContainer');
+                        } catch (error) {
+                            console.error(`Error fetching data for ${symbol}:`, error);
+                        }
+                    }
+                }
             } catch (error) {
                 heatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING HEATMAP: ${error.message}</p>`;
                 console.error('Heatmap error:', error);
