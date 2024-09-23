@@ -472,27 +472,34 @@
             const heatmapContainer = document.getElementById('heatmapContainer');
             heatmapContainer.innerHTML = `LOADING ${selectedSector.toUpperCase()} HEATMAP...`;
 
+            const stocksData = [];
+            createHeatmap(stocksData, 'heatmapContainer');
+
             try {
-                const stocksData = [];
-                for (const symbol of sectors[selectedSector]) {
+                const fetchPromises = sectors[selectedSector].map(async (symbol) => {
                     try {
                         const [profileData, quoteData] = await Promise.all([
                             fetchData(`https://finnhub.io/api/v1/stock/profile2?symbol=${symbol}&token=${FINNHUB_API_KEY}`),
                             fetchData(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`)
                         ]);
-                        stocksData.push({
+                        const stockData = {
                             symbol: symbol,
                             sector: selectedSector,
                             price: quoteData?.c || 0,
                             change: quoteData?.d || 0,
                             percentChange: quoteData?.dp || 0,
                             name: profileData?.name || symbol
-                        });
+                        };
+                        stocksData.push(stockData);
+                        updateHeatmap(stocksData, 'heatmapContainer');
+                        return stockData;
                     } catch (error) {
                         console.error(`Error fetching data for ${symbol}:`, error);
+                        return null;
                     }
-                }
-                createHeatmap(stocksData, 'heatmapContainer');
+                });
+
+                await Promise.all(fetchPromises);
             } catch (error) {
                 heatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING HEATMAP: ${error.message}</p>`;
                 console.error('Heatmap error:', error);
@@ -503,19 +510,24 @@
             const cryptoHeatmapContainer = document.getElementById('cryptoHeatmapContainer');
             cryptoHeatmapContainer.innerHTML = 'LOADING CRYPTO HEATMAP...';
 
+            const cryptoData = [];
+            createHeatmap(cryptoData, 'cryptoHeatmapContainer', 'marketCap');
+
             try {
                 const coinsData = await fetchData('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false', true);
                 
-                const cryptoData = coinsData.map(coin => ({
-                    symbol: coin.symbol.toUpperCase(),
-                    name: coin.name,
-                    price: coin.current_price,
-                    change: coin.price_change_24h,
-                    percentChange: coin.price_change_percentage_24h,
-                    marketCap: coin.market_cap
-                }));
-
-                createHeatmap(cryptoData, 'cryptoHeatmapContainer', 'marketCap');
+                coinsData.forEach(coin => {
+                    const coinData = {
+                        symbol: coin.symbol.toUpperCase(),
+                        name: coin.name,
+                        price: coin.current_price,
+                        change: coin.price_change_24h,
+                        percentChange: coin.price_change_percentage_24h,
+                        marketCap: coin.market_cap
+                    };
+                    cryptoData.push(coinData);
+                    updateHeatmap(cryptoData, 'cryptoHeatmapContainer', 'marketCap');
+                });
             } catch (error) {
                 cryptoHeatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING CRYPTO HEATMAP: ${error.message}</p>`;
                 console.error('Crypto Heatmap error:', error);
@@ -538,6 +550,18 @@
                 .append("g")
                 .attr("transform", `translate(${margin.left},${margin.top})`);
 
+            return svg;
+        }
+
+        function updateHeatmap(data, containerId, sizeMetric = 'percentChange') {
+            const container = document.getElementById(containerId);
+            const containerWidth = container.offsetWidth;
+            const margin = { top: 20, right: 20, bottom: 20, left: 20 };
+            const width = containerWidth - margin.left - margin.right;
+            const height = 300 - margin.top - margin.bottom;
+
+            const svg = d3.select(`#${containerId} svg g`);
+
             const root = d3.hierarchy({ children: data })
                 .sum(d => Math.abs(d[sizeMetric]));
 
@@ -553,21 +577,37 @@
                 .range(["#ff4136", "#ffffff", "#2ecc40"]);
 
             const cells = svg.selectAll("g")
-                .data(root.leaves())
-                .enter().append("g")
+                .data(root.leaves(), d => d.data.symbol);
+
+            const cellsEnter = cells.enter().append("g")
                 .attr("transform", d => `translate(${d.x0},${d.y0})`);
 
-            cells.append("rect")
+            cellsEnter.append("rect")
                 .attr("width", d => d.x1 - d.x0)
                 .attr("height", d => d.y1 - d.y0)
                 .attr("fill", d => colorScale(d.data.percentChange));
 
-            cells.append("text")
+            cellsEnter.append("text")
                 .attr("class", "heatmap-label")
                 .attr("x", d => (d.x1 - d.x0) / 2)
                 .attr("y", d => (d.y1 - d.y0) / 2)
                 .text(d => `${d.data.symbol}\n${d.data.percentChange.toFixed(2)}%`)
                 .call(wrap, d => d.x1 - d.x0);
+
+            cells.transition()
+                .attr("transform", d => `translate(${d.x0},${d.y0})`)
+                .select("rect")
+                .attr("width", d => d.x1 - d.x0)
+                .attr("height", d => d.y1 - d.y0)
+                .attr("fill", d => colorScale(d.data.percentChange));
+
+            cells.select("text")
+                .attr("x", d => (d.x1 - d.x0) / 2)
+                .attr("y", d => (d.y1 - d.y0) / 2)
+                .text(d => `${d.data.symbol}\n${d.data.percentChange.toFixed(2)}%`)
+                .call(wrap, d => d.x1 - d.x0);
+
+            cells.exit().remove();
         }
 
         function createFilingItem(filing) {
@@ -595,7 +635,7 @@
 
         function wrap(text, width) {
             text.each(function() {
-                let text = d3.select(this),
+                lettext = d3.select(this),
                     words = text.text().split(/\n/),
                     lineHeight = 1.1,
                     y = text.attr("y"),
