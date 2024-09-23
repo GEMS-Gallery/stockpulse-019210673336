@@ -129,6 +129,10 @@
             height: 600px;
             overflow: auto;
         }
+        .error-message {
+            color: red;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -267,7 +271,7 @@
 
                 displayStockInfo(profileData, quoteData, filingsData, newsData);
             } catch (error) {
-                resultDiv.innerHTML = `ERROR: ${error.message}. PLEASE TRY AGAIN LATER.`;
+                resultDiv.innerHTML = `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
                 console.error('Detailed error:', error);
             } finally {
                 loadingIndicator.style.display = 'none';
@@ -305,7 +309,7 @@
 
                 displayCryptoInfo(coinData, marketData);
             } catch (error) {
-                resultDiv.innerHTML = `ERROR: ${error.message}. PLEASE TRY AGAIN LATER.`;
+                resultDiv.innerHTML = `<p class="error-message">ERROR: ${error.message}. PLEASE TRY AGAIN LATER.</p>`;
                 console.error('Detailed error:', error);
             } finally {
                 loadingIndicator.style.display = 'none';
@@ -358,7 +362,7 @@
             const resultDiv = document.getElementById('cryptoResult');
 
             if (!coinData || !coinData.market_data) {
-                resultDiv.innerHTML = '<p>Error: Unable to fetch cryptocurrency data.</p>';
+                resultDiv.innerHTML = '<p class="error-message">Error: Unable to fetch cryptocurrency data.</p>';
                 return;
             }
 
@@ -476,7 +480,7 @@
                 const validStocksData = stocksData.filter(stock => stock !== null && stock.price > 0);
                 createHeatmap(validStocksData, 'heatmapContainer');
             } catch (error) {
-                heatmapContainer.innerHTML = `ERROR LOADING HEATMAP: ${error.message}`;
+                heatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING HEATMAP: ${error.message}</p>`;
                 console.error('Heatmap error:', error);
             }
         }
@@ -499,7 +503,7 @@
 
                 createHeatmap(cryptoData, 'cryptoHeatmapContainer', 'marketCap');
             } catch (error) {
-                cryptoHeatmapContainer.innerHTML = `ERROR LOADING CRYPTO HEATMAP: ${error.message}`;
+                cryptoHeatmapContainer.innerHTML = `<p class="error-message">ERROR LOADING CRYPTO HEATMAP: ${error.message}</p>`;
                 console.error('Crypto Heatmap error:', error);
             }
         }
